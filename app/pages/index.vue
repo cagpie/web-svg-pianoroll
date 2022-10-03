@@ -1,22 +1,46 @@
 <template>
   <div>
-    <div>
-      <input type="file" accept="audio/midi" @change="onMidiFileChanged">
-      <button @click="play">play</button>
-      <button @click="picoAudio.pause">pause</button>
-      <button @click="picoAudio.initStatus">init</button>
-    </div>
-    <div style="position: relative">
+    <div
+      :style="{position: 'relative', width: `${pianorollSize.width}px`, height: `${pianorollSize.height}px`}"
+    >
       <svg
-        style="    isolation: isolate"
+        style="position: absolute, top: 0"
         :width="pianorollSize.width"
         :height="pianorollSize.height"
         :viewBox="`${pianorollX} ${pianorollY} ${pianorollSize.width} ${pianorollSize.height}`"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <g style="isolation:isolate" ref="pianoroll"></g>
+        <g ref="pianoroll"></g>
       </svg>
-      <div :style="{position: 'absolute', width: '1px', height: `${pianorollSize.height}px`, top: '0', left: `${pianorollSize.width / 2}px`, backgroundColor: '#888'}"></div>
+      <div :style="{position: 'absolute', width: '1px', height: `${pianorollSize.height}px`, top: '0', left: `${pianorollSize.width / 2}px`, backgroundColor: '#888', opacity: '0.2', display: isDisplayCurrentLine ? 'block' : 'none'}"></div>
+      <div :style="{position: 'absolute', background: pianorollBackground, top: '0', left: '0', right: '0', bottom: '0', zIndex: -1}"></div>
+    </div>
+    <div style="margin-top: 20px">
+      <div>
+        <input type="file" accept="audio/midi" @change="onMidiFileChanged" />
+        <button @click="play">play</button>
+        <button @click="picoAudio.pause">pause</button>
+        <button @click="picoAudio.initStatus">init</button>
+      </div>
+      <div>
+        <div>
+          width <input type="number" v-model="pianorollSize.width" />
+          height <input type="number" v-model="pianorollSize.height" />
+        </div>
+        <div>
+          background <input type="text" v-model="pianorollBackground" />
+          <div>
+            e.g.
+            <code style="display: block">#f2f2f2</code>
+            <code style="display: block">radial-gradient(#ffffff, #aaaaaa)</code>
+            <code style="display: block">url('https://cagpie.net/data/img/kawaii.png')</code>
+          </div>
+        </div>
+        <div>
+          display center line
+          <input type="checkbox" v-model="isDisplayCurrentLine">
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -34,22 +58,22 @@
     "#000", "#000", "#000", "#000"
   ]
 
-
   const picoAudio = new PicoAudio()
   const pianoroll = ref()
 
-  const pianorollSize = {
-    width: 700,
-    height: 500
-  }
+  const pianorollSize = reactive({
+    width: 1131,
+    height: 636
+  })
   const noteResolution = 20
   const noteHeight = 5
   const pianorollX = ref(-(pianorollSize.width / 2))
-  const pianorollY = -pianorollSize.height - (noteHeight * 128 - pianorollSize.height) / 2
+  const pianorollY = computed(() => -pianorollSize.height - (noteHeight * 128 - pianorollSize.height) / 2)
+  const pianorollBackground = ref('#22113f')
+  const isDisplayCurrentLine = ref(true)
 
   const notes = {}
   const noteWidthRatio = ref(0)
-
 
   function play () {
     picoAudio.init()
@@ -63,8 +87,13 @@
     reader.onload = () => {
       const smf = new Uint8Array(reader.result as ArrayBuffer)
       const song = picoAudio.parseSMF(smf)
+
       picoAudio.setData(song)
+
       noteWidthRatio.value = (840 / song.header.resolution)
+      // 無理矢理曲長さを10秒伸ばす
+      picoAudio.tempoTrack.slice(-1)[0].time += 10
+
       renderPianoroll(song)
     };
   }
@@ -110,6 +139,11 @@
         obj.setAttribute('fill', ChannelColor[channelIdx])
         obj.setAttribute('opacity', note.velocity * 0.75)
 
+
+        obj.setAttribute('class', `ch-${channelIdx}`)
+        // 重くなるので使用を避ける
+        // obj.style.mixBlendMode = 'multiply'
+
         pianoroll.value.appendChild(obj)
         notes[note.id] = obj
       })
@@ -131,8 +165,7 @@
     render()
 
     picoAudio.addEventListener('noteOn', (note) => {
-      console.log(note)
-      notes[note.id].setAttribute('opacity', note.velocity * 1.3)
+      notes[note.id].setAttribute('opacity', note.velocity * 1.1)
       notes[note.id].setAttribute('stroke', ChannelColor[note.channel])
     })
 
